@@ -55,10 +55,25 @@ class DataManager:
         self.last_load_time = 0
         
         # Google Sheets integration
-        self.use_google_sheets = os.path.exists(CREDENTIALS_FILE)
-        self.gs_manager = None
-        if self.use_google_sheets:
-            self.gs_manager = google_sheets_manager.GoogleSheetManager(CREDENTIALS_FILE, SPREADSHEET_NAME)
+        # Check if running on Streamlit Cloud with secrets
+        try:
+            import streamlit as st
+            if hasattr(st, 'secrets') and 'SPREADSHEET_URL' in st.secrets:
+                spreadsheet_url = st.secrets['SPREADSHEET_URL']
+                self.use_google_sheets = True
+                self.gs_manager = google_sheets_manager.GoogleSheetManager(CREDENTIALS_FILE, spreadsheet_url)
+            elif os.path.exists(CREDENTIALS_FILE):
+                self.use_google_sheets = True
+                self.gs_manager = google_sheets_manager.GoogleSheetManager(CREDENTIALS_FILE, SPREADSHEET_NAME)
+            else:
+                self.use_google_sheets = False
+                self.gs_manager = None
+        except:
+            # Fallback if streamlit import fails or no secrets
+            self.use_google_sheets = os.path.exists(CREDENTIALS_FILE)
+            self.gs_manager = None
+            if self.use_google_sheets:
+                self.gs_manager = google_sheets_manager.GoogleSheetManager(CREDENTIALS_FILE, SPREADSHEET_NAME)
         
     def _get_header_row(self, df, target_column="CANDIDATE NAME"):
         """Finds the row index containing the target column."""
