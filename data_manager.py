@@ -7,7 +7,7 @@ import google_sheets_manager
 
 CREDENTIALS_FILE = "credentials.json"
 SPREADSHEET_NAME = "https://docs.google.com/spreadsheets/d/1477Q9GMKGSzMlWp6ao7YSt0CYXOsVPx87K8rbDdCfVM/edit?gid=0#gid=0" # Default name
-FILE_PATH = "recruitment_data.xlsx"  # Default Excel file path
+FILE_PATH = "recruitment_data.xlsx"  # Default Excel file path (fallback if Google Sheets not available)
 
 # Mapping from Excel Header to App Internal Name - EXPANDED
 COLUMN_MAPPING = {
@@ -88,24 +88,24 @@ class DataManager:
         """Loads all necessary data from the Excel file or Google Sheets."""
         
         # Try Google Sheets first if configured
-        if self.use_google_sheets:
+        if self.use_google_sheets and self.gs_manager:
             success, msg = self.gs_manager.load_data()
             if success:
                 self.candidates_df = self.gs_manager.candidates_df
                 self.jobs_df = self.gs_manager.jobs_df
                 self.preferences = self.gs_manager.preferences
                 self.last_load_time = time.time()
-                return True, f"Dati caricati da Google Sheets ({SPREADSHEET_NAME})"
+                return True, f"Dati caricati da Google Sheets"
             else:
-                # If Google Sheets fails and no local file exists, return error
+                # If Google Sheets fails and no local file exists, return detailed error
                 if not os.path.exists(self.file_path):
-                    return False, f"Errore Google Sheets: {msg}. Nessun file Excel locale disponibile."
+                    return False, f"❌ Google Sheets Error: {msg}\n\n💡 Possibili soluzioni:\n1. Verifica che il foglio sia condiviso con: dylan4luigi@papa-479815.iam.gserviceaccount.com\n2. Controlla che i Secrets siano configurati correttamente su Streamlit Cloud\n3. Verifica che l'URL del foglio sia corretto"
                 # Otherwise fallback to local file
-                print(f"Fallback to local Excel: {msg}")
+                print(f"⚠️ Google Sheets fallito ({msg}), provo con file locale...")
 
         # Use local Excel file
         if not os.path.exists(self.file_path):
-            return False, "File Excel non trovato e Google Sheets non configurato."
+            return False, f"❌ File Excel '{self.file_path}' non trovato.\n\n💡 Per usare Google Sheets:\n1. Configura i Secrets su Streamlit Cloud\n2. Condividi il foglio con: dylan4luigi@papa-479815.iam.gserviceaccount.com"
 
         try:
             # Use ExcelFile to open once and read multiple sheets
