@@ -4,9 +4,10 @@ import os
 import time
 import google_sheets_manager
 
-FILE_PATH = "Luigi Recruitment-Tracker-Someka-Excel-Template-V9-Free-Version-2.xlsx"
+
 CREDENTIALS_FILE = "credentials.json"
 SPREADSHEET_NAME = "https://docs.google.com/spreadsheets/d/1477Q9GMKGSzMlWp6ao7YSt0CYXOsVPx87K8rbDdCfVM/edit?gid=0#gid=0" # Default name
+FILE_PATH = "recruitment_data.xlsx"  # Default Excel file path
 
 # Mapping from Excel Header to App Internal Name - EXPANDED
 COLUMN_MAPPING = {
