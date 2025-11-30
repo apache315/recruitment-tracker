@@ -81,14 +81,15 @@ class DataManager:
                 self.last_load_time = time.time()
                 return True, f"Dati caricati da Google Sheets ({SPREADSHEET_NAME})"
             else:
-                # Fallback to local file if GSheets fails but file exists
-                if os.path.exists(self.file_path):
-                    print(f"Fallback to local Excel: {msg}")
-                else:
-                    return False, f"Errore Google Sheets: {msg}"
+                # If Google Sheets fails and no local file exists, return error
+                if not os.path.exists(self.file_path):
+                    return False, f"Errore Google Sheets: {msg}. Nessun file Excel locale disponibile."
+                # Otherwise fallback to local file
+                print(f"Fallback to local Excel: {msg}")
 
+        # Use local Excel file
         if not os.path.exists(self.file_path):
-            return False, "File Excel non trovato."
+            return False, "File Excel non trovato e Google Sheets non configurato."
 
         try:
             # Use ExcelFile to open once and read multiple sheets
