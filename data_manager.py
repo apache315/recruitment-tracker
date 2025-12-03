@@ -299,14 +299,27 @@ class DataManager:
             return False, f"Errore nel salvataggio: {e}"
 
     def update_candidate(self, candidate_name, updates):
-        """Updates an existing candidate."""
+        """Updates an existing candidate.
+        
+        Args:
+            candidate_name: Nome del candidato da aggiornare
+            updates: Dizionario con i campi da aggiornare {field_name: new_value}
+            
+        Returns:
+            Tuple (success: bool, message: str)
+        """
         if self.use_google_sheets:
-            return False, "Aggiornamento non ancora implementato per Google Sheets."
+            return self.gs_manager.update_candidate(candidate_name, updates)
             
         try:
-            # This is a simplified version - in production you'd want to match by a unique ID
-            # For now, we'll match by candidate name
-            
+            # Check file lock first
+            try:
+                with open(self.file_path, "a"):
+                    pass
+            except PermissionError:
+                return False, "Il file Excel è aperto in un altro programma. Chiudilo per aggiornare."
+
+            # Excel implementation
             df_raw = pd.read_excel(self.file_path, sheet_name="Candidates", header=None, nrows=20)
             header_row = self._get_header_row(df_raw, "CANDIDATE NAME")
             
@@ -316,32 +329,78 @@ class DataManager:
             wb = openpyxl.load_workbook(self.file_path)
             ws = wb["Candidates"]
             
-            # Find the row with this candidate
-            # Note: This is simplified - assumes candidate name is unique
-            found = False
-            for row_idx, row in enumerate(ws.iter_rows(min_row=header_row+2), start=header_row+2):
-                if row[5].value == candidate_name:  # Assuming column F (index 5) is CANDIDATE NAME
-                    # Update the row
-                    # This would need proper column mapping
-                    found = True
+            # Get headers from the Excel file
+            df_header = pd.read_excel(self.file_path, sheet_name="Candidates", header=header_row, nrows=0)
+            headers = df_header.columns.tolist()
+            
+            # Find candidate name column index
+            name_col_idx = None
+            for idx, col in enumerate(headers):
+                mapped_name = COLUMN_MAPPING.get(col, col)
+                if mapped_name == "CANDIDATE NAME" or col == "CANDIDATE NAME":
+                    name_col_idx = idx
                     break
             
-            if not found:
+            if name_col_idx is None:
+                return False, "Colonna CANDIDATE NAME non trovata."
+            
+            # Find the row with this candidate (1-based for openpyxl)
+            found_row = None
+            for row_idx, row in enumerate(ws.iter_rows(min_row=header_row+2), start=header_row+2):
+                cell_value = row[name_col_idx].value
+                if cell_value and str(cell_value).strip() == str(candidate_name).strip():
+                    found_row = row_idx
+                    break
+            
+            if found_row is None:
                 return False, f"Candidato '{candidate_name}' non trovato."
+            
+            # Update cells based on the updates dictionary
+            for field, value in updates.items():
+                # Find the Excel column name for this field
+                # First check if field is already an Excel column name
+                excel_col = None
+                if field in headers:
+                    excel_col = field
+                else:
+                    # Try reverse mapping (internal name -> Excel name)
+                    excel_col = REVERSE_MAPPING.get(field, None)
+                
+                if excel_col and excel_col in headers:
+                    col_idx = headers.index(excel_col)
+                    # openpyxl uses 1-based indexing
+                    ws.cell(row=found_row, column=col_idx+1, value=value)
             
             wb.save(self.file_path)
             self.load_data()
             
             return True, "Candidato aggiornato con successo!"
+        except PermissionError:
+            return False, "Il file Excel è aperto in un altro programma. Chiudilo per aggiornare."
         except Exception as e:
             return False, f"Errore nell'aggiornamento: {e}"
 
     def update_job_opening(self, job_id, updates):
-        """Updates an existing job opening."""
+        """Updates an existing job opening.
+        
+        Args:
+            job_id: ID della posizione da aggiornare
+            updates: Dizionario con i campi da aggiornare {field_name: new_value}
+            
+        Returns:
+            Tuple (success: bool, message: str)
+        """
         if self.use_google_sheets:
-            return False, "Aggiornamento non ancora implementato per Google Sheets."
+            return self.gs_manager.update_job_opening(job_id, updates)
             
         try:
+            # Check file lock first
+            try:
+                with open(self.file_path, "a"):
+                    pass
+            except PermissionError:
+                return False, "Il file Excel è aperto in un altro programma. Chiudilo per aggiornare."
+
             df_raw = pd.read_excel(self.file_path, sheet_name="JobOpenings", header=None, nrows=20)
             header_row = self._get_header_row(df_raw, "JOB ID")
             
@@ -351,20 +410,54 @@ class DataManager:
             wb = openpyxl.load_workbook(self.file_path)
             ws = wb["JobOpenings"]
             
-            # Find and update
-            found = False
-            for row_idx, row in enumerate(ws.iter_rows(min_row=header_row+2), start=header_row+2):
-                if row[1].value == job_id:  # Assuming column B (index 1) is JOB ID
-                    found = True
+            # Get headers
+            df_header = pd.read_excel(self.file_path, sheet_name="JobOpenings", header=header_row, nrows=0)
+            headers = df_header.columns.tolist()
+            
+            # Find JOB ID column index
+            job_id_col_idx = None
+            for idx, col in enumerate(headers):
+                mapped_name = JOB_MAPPING.get(col, col)
+                if mapped_name == "JOB ID" or col == "JOB ID":
+                    job_id_col_idx = idx
                     break
             
-            if not found:
+            if job_id_col_idx is None:
+                return False, "Colonna JOB ID non trovata."
+            
+            # Find the row with this job ID
+            found_row = None
+            for row_idx, row in enumerate(ws.iter_rows(min_row=header_row+2), start=header_row+2):
+                cell_value = row[job_id_col_idx].value
+                # Convert both to string for comparison
+                if cell_value is not None and str(cell_value).strip() == str(job_id).strip():
+                    found_row = row_idx
+                    break
+            
+            if found_row is None:
                 return False, f"Posizione con ID '{job_id}' non trovata."
+            
+            # Update cells based on the updates dictionary
+            for field, value in updates.items():
+                # Find the Excel column name for this field
+                excel_col = None
+                if field in headers:
+                    excel_col = field
+                else:
+                    # Try reverse mapping (internal name -> Excel name)
+                    excel_col = REVERSE_JOB_MAPPING.get(field, None)
+                
+                if excel_col and excel_col in headers:
+                    col_idx = headers.index(excel_col)
+                    # openpyxl uses 1-based indexing
+                    ws.cell(row=found_row, column=col_idx+1, value=value)
             
             wb.save(self.file_path)
             self.load_data()
             
             return True, "Posizione aggiornata con successo!"
+        except PermissionError:
+            return False, "Il file Excel è aperto in un altro programma. Chiudilo per aggiornare."
         except Exception as e:
             return False, f"Errore nell'aggiornamento: {e}"
 

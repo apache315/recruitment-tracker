@@ -214,3 +214,117 @@ class GoogleSheetManager:
             return True, "Posizione salvata su Google Sheets!"
         except Exception as e:
             return False, f"Errore salvataggio GSheets: {e}"
+
+    def _find_row_by_value(self, worksheet, column_name, value):
+        """Trova l'indice della riga che contiene il valore specificato nella colonna
+        
+        Args:
+            worksheet: gspread worksheet object
+            column_name: Nome della colonna da cercare
+            value: Valore da cercare
+            
+        Returns:
+            Indice della riga (1-based) o None se non trovato
+        """
+        try:
+            headers = worksheet.row_values(1)
+            if column_name not in headers:
+                return None
+            
+            col_idx = headers.index(column_name) + 1  # 1-based for gspread
+            col_values = worksheet.col_values(col_idx)
+            
+            # Skip header row (index 0) and search from row 2 onwards
+            for idx, cell_value in enumerate(col_values[1:], start=2):
+                if str(cell_value).strip() == str(value).strip():
+                    return idx
+            return None
+        except Exception as e:
+            print(f"Errore in _find_row_by_value: {e}")
+            return None
+
+    def update_candidate(self, candidate_name, updates):
+        """Aggiorna un candidato esistente su Google Sheets
+        
+        Args:
+            candidate_name: Nome del candidato da aggiornare
+            updates: Dizionario con i campi da aggiornare {field_name: new_value}
+            
+        Returns:
+            Tuple (success: bool, message: str)
+        """
+        if not self.is_connected:
+            success, msg = self.connect()
+            if not success:
+                return False, msg
+        
+        try:
+            ws = self.spreadsheet.worksheet("Candidates")
+            row_idx = self._find_row_by_value(ws, "CANDIDATE NAME", candidate_name)
+            
+            if row_idx is None:
+                return False, f"Candidato '{candidate_name}' non trovato."
+            
+            headers = ws.row_values(1)
+            
+            # Aggiorna solo le celle specificate
+            for field, value in updates.items():
+                if field in headers:
+                    col_idx = headers.index(field) + 1  # 1-based
+                    
+                    # Converti date in stringhe
+                    if hasattr(value, 'strftime'):
+                        value = value.strftime('%Y-%m-%d')
+                    # Converti None in stringa vuota
+                    elif value is None:
+                        value = ""
+                    
+                    ws.update_cell(row_idx, col_idx, str(value))
+            
+            self.load_data()  # Ricarica dati
+            return True, "Candidato aggiornato con successo su Google Sheets!"
+        except Exception as e:
+            return False, f"Errore aggiornamento candidato: {e}"
+
+    def update_job_opening(self, job_id, updates):
+        """Aggiorna una posizione lavorativa esistente su Google Sheets
+        
+        Args:
+            job_id: ID della posizione da aggiornare
+            updates: Dizionario con i campi da aggiornare {field_name: new_value}
+            
+        Returns:
+            Tuple (success: bool, message: str)
+        """
+        if not self.is_connected:
+            success, msg = self.connect()
+            if not success:
+                return False, msg
+        
+        try:
+            ws = self.spreadsheet.worksheet("JobOpenings")
+            row_idx = self._find_row_by_value(ws, "JOB ID", str(job_id))
+            
+            if row_idx is None:
+                return False, f"Posizione con ID '{job_id}' non trovata."
+            
+            headers = ws.row_values(1)
+            
+            # Aggiorna solo le celle specificate
+            for field, value in updates.items():
+                if field in headers:
+                    col_idx = headers.index(field) + 1  # 1-based
+                    
+                    # Converti date in stringhe
+                    if hasattr(value, 'strftime'):
+                        value = value.strftime('%Y-%m-%d')
+                    # Converti None in stringa vuota
+                    elif value is None:
+                        value = ""
+                    
+                    ws.update_cell(row_idx, col_idx, str(value))
+            
+            self.load_data()  # Ricarica dati
+            return True, "Posizione aggiornata con successo su Google Sheets!"
+        except Exception as e:
+            return False, f"Errore aggiornamento posizione: {e}"

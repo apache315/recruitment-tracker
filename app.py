@@ -40,7 +40,9 @@ with st.sidebar:
     page = st.radio(
         "Navigation",
         ["🏠 Dashboard", "💼 Job Openings", "👤 Candidates", "📊 Analytics", 
-         "➕ Add Candidate", "➕ Add Job Opening", "⚙️ Settings"],
+         "➕ Add Candidate", "➕ Add Job Opening", 
+         "✏️ Edit Candidate", "✏️ Edit Job Opening",
+         "⚙️ Settings"],
         label_visibility="collapsed"
     )
     
@@ -572,6 +574,294 @@ elif page == "➕ Add Job Opening":
                     st.balloons()
                 else:
                     st.error(msg)
+
+# =============================================================================
+# EDIT CANDIDATE PAGE
+# =============================================================================
+elif page == "✏️ Edit Candidate":
+    styles.render_page_header("Edit Candidate", "Modify existing candidate information")
+    
+    if df_candidates.empty:
+        st.warning("No candidates available to edit.")
+    else:
+        # Step 1: Select candidate
+        candidate_names = df_candidates["CANDIDATE NAME"].dropna().tolist()
+        
+        if not candidate_names:
+            st.warning("No candidates with valid names found.")
+        else:
+            selected_candidate = st.selectbox(
+                "Select Candidate to Edit",
+                options=candidate_names,
+                key="edit_candidate_select"
+            )
+            
+            if selected_candidate:
+                # Get current data
+                current_data = df_candidates[df_candidates["CANDIDATE NAME"] == selected_candidate].iloc[0]
+                
+                st.markdown("---")
+                st.markdown(f"### Editing: **{selected_candidate}**")
+                st.info("💡 Modify the fields you want to update and click 'Update Candidate'")
+                
+                # Edit form (similar to Add Candidate but pre-populated)
+                with st.form("edit_candidate_form"):
+                    st.markdown("### Personal Information")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Name is read-only (used as identifier)
+                        st.text_input("Candidate Name (Read-Only)", value=selected_candidate, disabled=True, key="edit_cand_name")
+                        email = st.text_input("Email", value=str(current_data.get("EMAIL", "")), key="edit_cand_email")
+                        phone = st.text_input("Phone", value=str(current_data.get("PHONE", "")), key="edit_cand_phone")
+                    
+                    with col2:
+                        # Handle date conversion
+                        app_date = current_data.get("APPLICATION DATE")
+                        if pd.notna(app_date):
+                            if isinstance(app_date, str):
+                                app_date = pd.to_datetime(app_date, errors='coerce')
+                            date = st.date_input("Application Date", value=app_date, key="edit_cand_date")
+                        else:
+                            date = st.date_input("Application Date", key="edit_cand_date")
+                        
+                        current_source = str(current_data.get("SOURCE", ""))
+                        source_options = preferences.get("Sources", [])
+                        source_idx = source_options.index(current_source) if current_source in source_options else 0
+                        source = st.selectbox("Source", options=source_options, index=source_idx, key="edit_cand_source")
+                    
+                    st.markdown("### Position & Assignment")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        # Job selection
+                        job_options = df_jobs["JOB TITLE"].tolist() if not df_jobs.empty else []
+                        current_position = str(current_data.get("POSITION", ""))
+                        pos_idx = job_options.index(current_position) if current_position in job_options else 0
+                        position = st.selectbox("Position", options=job_options, index=pos_idx, key="edit_cand_position")
+                        
+                        # Auto-populate job ID and department based on position
+                        if position and not df_jobs.empty:
+                            selected_job = df_jobs[df_jobs["JOB TITLE"] == position].iloc[0]
+                            job_id = selected_job["JOB ID"]
+                            department = selected_job["DEPARTMENT"]
+                        else:
+                            job_id = current_data.get("JOB ID")
+                            department = current_data.get("DEPARTMENT")
+                    
+                    with col2:
+                        recruiter_options = preferences.get("Recruiters", [])
+                        current_recruiter = str(current_data.get("RECRUITER", ""))
+                        rec_idx = recruiter_options.index(current_recruiter) if current_recruiter in recruiter_options else 0
+                        recruiter = st.selectbox("Recruiter", options=recruiter_options, index=rec_idx, key="edit_cand_recruiter")
+                    
+                    with col3:
+                        status_options = preferences.get("Status", [])
+                        current_status = str(current_data.get("STATUS", ""))
+                        status_idx = status_options.index(current_status) if current_status in status_options else 0
+                        status = st.selectbox("Status", options=status_options, index=status_idx, key="edit_cand_status")
+                    
+                    st.markdown("### Decision & Feedback")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        decision_options = ["", "Hired", "Not Hired", "Candidate in Process", "Candidate Refusal"]
+                        current_decision = str(current_data.get("FINAL DECISION", ""))
+                        dec_idx = decision_options.index(current_decision) if current_decision in decision_options else 0
+                        final_decision = st.selectbox(
+                            "Final Decision", 
+                            options=decision_options,
+                            index=dec_idx,
+                            key="edit_cand_decision"
+                        )
+                    
+                    with col2:
+                        pass  # Placeholder for balance
+                    
+                    # Multi-stakeholder views
+                    st.markdown("### Stakeholder Views")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        hr_view = st.text_area("HR View", value=str(current_data.get("HR VIEW", "")), key="edit_cand_hr_view")
+                    with col2:
+                        manager_view = st.text_area("Hiring Manager View", value=str(current_data.get("HIRING MANAGER VIEW", "")), key="edit_cand_manager_view")
+                    with col3:
+                        decision_maker_view = st.text_area("Decision Maker View", value=str(current_data.get("DECISION MAKER VIEW", "")), key="edit_cand_dm_view")
+                    
+                    st.markdown("### Comments & Notes")
+                    received_app_comments = st.text_area("Received Application Comments", value=str(current_data.get("RECEIVED APPLICATION COMMENTS", "")), key="edit_cand_rec_comments")
+                    notes = st.text_area("General Notes / Comments", value=str(current_data.get("NOTES", "")), key="edit_cand_notes")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        submitted = st.form_submit_button("💾 Update Candidate", use_container_width=True)
+                    with col2:
+                        cancel = st.form_submit_button("❌ Cancel", use_container_width=True)
+                    
+                    if cancel:
+                        st.rerun()
+                    
+                    if submitted:
+                        # Build updates dictionary with all fields
+                        updates = {
+                            "EMAIL": email,
+                            "PHONE": phone,
+                            "APPLICATION DATE": date,
+                            "POSITION": position,
+                            "JOB ID": job_id,
+                            "DEPARTMENT": department,
+                            "RECRUITER": recruiter,
+                            "SOURCE": source,
+                            "STATUS": status,
+                            "FINAL DECISION": final_decision,
+                            "HR VIEW": hr_view,
+                            "HIRING MANAGER VIEW": manager_view,
+                            "DECISION MAKER VIEW": decision_maker_view,
+                            "RECEIVED APPLICATION COMMENTS": received_app_comments,
+                            "NOTES": notes
+                        }
+                        
+                        success, msg = data_manager.update_candidate(selected_candidate, updates)
+                        if success:
+                            st.success(msg)
+                            st.balloons()
+                            st.cache_data.clear()
+                            # Wait a moment then rerun to show updated data
+                            import time
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error(msg)
+
+# =============================================================================
+# EDIT JOB OPENING PAGE
+# =============================================================================
+elif page == "✏️ Edit Job Opening":
+    styles.render_page_header("Edit Job Opening", "Modify existing position information")
+    
+    if df_jobs.empty:
+        st.warning("No job openings available to edit.")
+    else:
+        # Step 1: Select job opening
+        # Create display options with both ID and Title
+        job_display_options = []
+        job_id_map = {}
+        
+        for idx, row in df_jobs.iterrows():
+            job_id = row.get("JOB ID", "")
+            job_title = row.get("JOB TITLE", "")
+            display = f"{job_id} - {job_title}"
+            job_display_options.append(display)
+            job_id_map[display] = job_id
+        
+        if not job_display_options:
+            st.warning("No job openings with valid IDs found.")
+        else:
+            selected_job_display = st.selectbox(
+                "Select Job Opening to Edit",
+                options=job_display_options,
+                key="edit_job_select"
+            )
+            
+            if selected_job_display:
+                selected_job_id = job_id_map[selected_job_display]
+                
+                # Get current data
+                current_data = df_jobs[df_jobs["JOB ID"] == selected_job_id].iloc[0]
+                
+                st.markdown("---")
+                st.markdown(f"### Editing: **{selected_job_display}**")
+                st.info("💡 Modify the fields you want to update and click 'Update Job Opening'")
+                
+                with st.form("edit_job_form"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Job ID is read-only (used as identifier)
+                        st.text_input("Job ID (Read-Only)", value=str(selected_job_id), disabled=True, key="edit_job_id")
+                        job_title = st.text_input("Job Title *", value=str(current_data.get("JOB TITLE", "")), key="edit_job_title")
+                        
+                        dept_options = preferences.get("Departments", []) + ["+ Add New"]
+                        current_dept = str(current_data.get("DEPARTMENT", ""))
+                        dept_idx = dept_options.index(current_dept) if current_dept in dept_options else 0
+                        department = st.selectbox("Department", options=dept_options, index=dept_idx, key="edit_job_dept")
+                        
+                        if department == "+ Add New":
+                            department = st.text_input("New Department Name", key="edit_job_new_dept")
+                    
+                    with col2:
+                        recruiter_options = preferences.get("Recruiters", [])
+                        current_recruiter = str(current_data.get("RECRUITER", ""))
+                        rec_idx = recruiter_options.index(current_recruiter) if current_recruiter in recruiter_options else 0
+                        recruiter = st.selectbox("Assigned Recruiter", options=recruiter_options, index=rec_idx, key="edit_job_recruiter")
+                        
+                        # Handle opening date
+                        opening_date_val = current_data.get("OPENING DATE")
+                        if pd.notna(opening_date_val):
+                            if isinstance(opening_date_val, str):
+                                opening_date_val = pd.to_datetime(opening_date_val, errors='coerce')
+                            opening_date = st.date_input("Opening Date", value=opening_date_val, key="edit_job_opening_date")
+                        else:
+                            opening_date = st.date_input("Opening Date", key="edit_job_opening_date")
+                        
+                        status_options = preferences.get("Job Statuses", [])
+                        current_status = str(current_data.get("STATUS", ""))
+                        status_idx = status_options.index(current_status) if current_status in status_options else 0
+                        status = st.selectbox("Status", options=status_options, index=status_idx, key="edit_job_status")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        # Handle start date
+                        start_date_val = current_data.get("NEW HIRE START DATE")
+                        if pd.notna(start_date_val):
+                            if isinstance(start_date_val, str):
+                                start_date_val = pd.to_datetime(start_date_val, errors='coerce')
+                            target_start_date = st.date_input("Target Start Date", value=start_date_val, key="edit_job_start_date")
+                        else:
+                            target_start_date = st.date_input("Target Start Date (Optional)", value=None, key="edit_job_start_date")
+                    
+                    with col2:
+                        current_cost = current_data.get("HIRING COST", 0)
+                        if pd.notna(current_cost):
+                            current_cost = float(current_cost)
+                        else:
+                            current_cost = 0.0
+                        hiring_cost = st.number_input("Hiring Cost Budget ($)", min_value=0.0, value=current_cost, key="edit_job_cost")
+                    
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        submitted = st.form_submit_button("💾 Update Job Opening", use_container_width=True)
+                    with col2:
+                        cancel = st.form_submit_button("❌ Cancel", use_container_width=True)
+                    
+                    if cancel:
+                        st.rerun()
+                    
+                    if submitted:
+                        if not job_title:
+                            st.error("Job title is required.")
+                        else:
+                            updates = {
+                                "JOB TITLE": job_title,
+                                "DEPARTMENT": department,
+                                "RECRUITER": recruiter,
+                                "OPENING DATE": opening_date,
+                                "STATUS": status,
+                                "NEW HIRE START DATE": target_start_date if target_start_date else None,
+                                "HIRING COST": hiring_cost
+                            }
+                            
+                            success, msg = data_manager.update_job_opening(selected_job_id, updates)
+                            if success:
+                                st.success(msg)
+                                st.balloons()
+                                st.cache_data.clear()
+                                import time
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(msg)
 
 # =============================================================================
 # SETTINGS PAGE
